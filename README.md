@@ -39,10 +39,10 @@ const ast = parse('if [ -f "$1" ]; then cat "$1"; fi');
 unbash might be a good fit if you prefer:
 
 - AST output
-- A zero-dependency dependendency that runs in any JS environment
+- A zero-dependency package that runs in any JS environment
 - A typed TypeScript API
 - Built-in parsing for command/process substitutions, coproc, Bash 5.3 `${ cmd; }`, `[[ ]]`, `(( ))`, and extglob
-- Error recovery that collects errors instead of throwing
+- Tolerant parsing that never throws and collects parse errors
 
 ## unbash vs sh-syntax
 
@@ -66,7 +66,7 @@ unbash might be a good fit if you prefer:
 
 - A zero-dependency architecture
 - A typed TypeScript API (ESM-only)
-- Error recovery that collects errors instead of throwing
+- Tolerant parsing that never throws and collects parse errors
 - Structured AST nodes for parameter expansions, arithmetic expressions, and `[[ ]]` test expressions
 - Support for many additional syntax features (like herestrings, C-style for loops, `select`, process substitution, etc. etc.)
 

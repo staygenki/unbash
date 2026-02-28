@@ -4,6 +4,7 @@ import type {
   DoubleQuotedChild,
   ExtGlobOperator,
   ParameterExpansionPart,
+  ParseError,
   Word,
   WordPart,
 } from "./types.ts";
@@ -351,6 +352,7 @@ export class Lexer {
   // Removed parseFn
   private pendingHereDocs: PendingHereDoc[];
   private collectedExpansions: DeferredCommandExpansion[];
+  _errors: ParseError[] | null = null;
   _buildParts = false;
 
   constructor(src: string) {
@@ -369,6 +371,10 @@ export class Lexer {
   }
 
   // Removed setParser
+
+  get errors(): ParseError[] {
+    return this._errors ?? (this._errors = []);
+  }
 
   getCollectedExpansions(): DeferredCommandExpansion[] {
     return this.collectedExpansions;
@@ -1140,6 +1146,7 @@ export class Lexer {
         const value = src.slice(start, pos);
         text += value;
         if (pos < len) pos++;
+        else this.errors.push({ message: "unterminated single quote", pos: start - 1 });
         if (bp) {
           if (litBuf) {
             parts!.push({ type: "Literal", value: litBuf });
@@ -1570,6 +1577,7 @@ export class Lexer {
     if (bp && parts && litBuf) parts.push({ type: "Literal", value: litBuf });
 
     if (this.pos < len) this.pos++; // closing "
+    else this.errors.push({ message: "unterminated double quote", pos: contentStart - 1 });
     this._dqText = text;
     this._dqHasExpansions = hasExpansions;
     this._dqParts = parts;
@@ -1822,6 +1830,7 @@ export class Lexer {
       }
     }
     if (this.pos < len) this.pos++; // closing `
+    else this.errors.push({ message: "unterminated backtick", pos: start - 1 });
 
     const text = src.slice(start - 1, this.pos); // raw source including backticks
     this._resultText = inner;

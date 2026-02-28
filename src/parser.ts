@@ -1,5 +1,6 @@
 // oxlint-disable unicorn/no-thenable
-export type { AssignmentPrefix, Node, ParseError, Script, Statement } from "./types.ts";
+export type { AssignmentPrefix, Node, ParseError, Script, Statement, WordPart } from "./types.ts";
+export { computeWordParts } from "./parts.ts";
 import type {
   ArithmeticCommand,
   ArithmeticExpression,
@@ -183,6 +184,10 @@ class Parser {
 
   parse(sourceLen: number): Script & { errors?: ParseError[] } {
     const commands = this.list();
+    const lexerErrors = this.tok._errors;
+    if (lexerErrors !== null) {
+      for (let i = 0; i < lexerErrors.length; i++) this.errors.push(lexerErrors[i]);
+    }
     const result: Script & { errors?: ParseError[] } = {
       type: "Script",
       pos: 0,
@@ -191,6 +196,14 @@ class Parser {
       errors: this.errors.length > 0 ? this.errors : undefined,
     };
     return result;
+  }
+
+  private error(message: string, pos: number): void {
+    this.errors.push({ message, pos });
+  }
+
+  private skipSemi(): void {
+    if (this.tok.peek(LexContext.Normal).token === Token.Semi) this.tok.next(LexContext.Normal);
   }
 
   private accept(token: Token, ctx: LexContext = LexContext.Normal) {
@@ -509,6 +522,7 @@ class Parser {
     const pos = this.tok.next(LexContext.CommandStart).pos;
     const commands = this.list();
     const closeEnd = this.acceptEnd(Token.RParen, LexContext.Normal);
+    if (closeEnd < 0) this.error("expected ')' to close subshell", this.tok.getPos());
     const end = closeEnd >= 0 ? closeEnd : pos;
     this._redirects = this.collectTrailingRedirects();
     return { type: "Subshell", pos, end, body: this.makeCompoundList(commands) };
@@ -519,6 +533,7 @@ class Parser {
     const pos = this.tok.next(LexContext.CommandStart).pos;
     const commands = this.list();
     const closeEnd = this.acceptEnd(Token.RBrace, LexContext.Normal);
+    if (closeEnd < 0) this.error("expected '}' to close brace group", this.tok.getPos());
     const end = closeEnd >= 0 ? closeEnd : pos;
     this._redirects = this.collectTrailingRedirects();
     return { type: "BraceGroup", pos, end, body: this.makeCompoundList(commands) };
@@ -528,8 +543,10 @@ class Parser {
   private ifClause(): If {
     const pos = this.tok.next(LexContext.CommandStart).pos;
     const clause = this.wrapList(this.list());
-    this.accept(Token.Then, LexContext.CommandStart);
+    this.skipSemi();
+    if (!this.accept(Token.Then, LexContext.CommandStart)) this.error("expected 'then'", this.tok.getPos());
     const then_ = this.wrapList(this.list());
+    this.skipSemi();
     let else_: Node | undefined;
     let end: number;
     if (this.tok.peek(LexContext.CommandStart).token === Token.Elif) {
@@ -537,10 +554,13 @@ class Parser {
       end = else_.end; // elif's ifClause already consumed fi
     } else if (this.accept(Token.Else, LexContext.CommandStart)) {
       else_ = this.wrapList(this.list());
+      this.skipSemi();
       const closeEnd = this.acceptEnd(Token.Fi, LexContext.CommandStart);
+      if (closeEnd < 0) this.error("expected 'fi' to close 'if'", this.tok.getPos());
       end = closeEnd >= 0 ? closeEnd : pos;
     } else {
       const closeEnd = this.acceptEnd(Token.Fi, LexContext.CommandStart);
+      if (closeEnd < 0) this.error("expected 'fi' to close 'if'", this.tok.getPos());
       end = closeEnd >= 0 ? closeEnd : pos;
     }
     this._redirects = this.collectTrailingRedirects();
@@ -564,12 +584,14 @@ class Parser {
       while (this.tok.peek(LexContext.Normal).token === Token.Word) {
         wordlist.push(this.readWord(LexContext.Normal));
       }
-      if (this.tok.peek(LexContext.Normal).token === Token.Semi) this.tok.next(LexContext.Normal);
     }
+    this.skipSemi();
     this.skipNewlines(LexContext.CommandStart);
-    this.accept(Token.Do, LexContext.CommandStart);
+    if (!this.accept(Token.Do, LexContext.CommandStart)) this.error("expected 'do'", this.tok.getPos());
     const body = this.list();
+    this.skipSemi();
     const closeEnd = this.acceptEnd(Token.Done, LexContext.CommandStart);
+    if (closeEnd < 0) this.error("expected 'done' to close 'for'", this.tok.getPos());
     const end = closeEnd >= 0 ? closeEnd : pos;
     this._redirects = this.collectTrailingRedirects();
     return { type: "For", pos, end, name, wordlist, body: this.makeCompoundList(body) } satisfies For;
@@ -598,9 +620,10 @@ class Parser {
         body: bg.body,
       } satisfies ArithmeticFor;
     }
-    this.accept(Token.Do, LexContext.CommandStart);
+    if (!this.accept(Token.Do, LexContext.CommandStart)) this.error("expected 'do'", this.tok.getPos());
     const body = this.list();
     const closeEnd = this.acceptEnd(Token.Done, LexContext.CommandStart);
+    if (closeEnd < 0) this.error("expected 'done' to close 'for'", this.tok.getPos());
     const end = closeEnd >= 0 ? closeEnd : pos;
     this._redirects = this.collectTrailingRedirects();
     return {
@@ -625,9 +648,12 @@ class Parser {
   private whileOrUntil(kind: "while" | "until"): While {
     const pos = this.tok.next(LexContext.CommandStart).pos;
     const clause = this.wrapList(this.list());
-    this.accept(Token.Do, LexContext.CommandStart);
+    this.skipSemi();
+    if (!this.accept(Token.Do, LexContext.CommandStart)) this.error("expected 'do'", this.tok.getPos());
     const body = this.list();
+    this.skipSemi();
     const closeEnd = this.acceptEnd(Token.Done, LexContext.CommandStart);
+    if (closeEnd < 0) this.error(`expected 'done' to close '${kind}'`, this.tok.getPos());
     const end = closeEnd >= 0 ? closeEnd : pos;
     this._redirects = this.collectTrailingRedirects();
     return { type: "While", pos, end, kind, clause, body: this.makeCompoundList(body) };
@@ -638,7 +664,7 @@ class Parser {
     const pos = this.tok.next(LexContext.CommandStart).pos;
     const word = this.readWord(LexContext.Normal);
     this.skipNewlines(LexContext.CommandStart);
-    this.accept(Token.In, LexContext.CommandStart);
+    if (!this.accept(Token.In, LexContext.CommandStart)) this.error("expected 'in' after 'case' word", this.tok.getPos());
     this.skipNewlines(LexContext.CommandStart);
 
     const items: CaseItem[] = [];
@@ -679,6 +705,7 @@ class Parser {
       t = this.tok.peek(LexContext.CommandStart).token;
     }
     const closeEnd = this.acceptEnd(Token.Esac, LexContext.CommandStart);
+    if (closeEnd < 0) this.error("expected 'esac' to close 'case'", this.tok.getPos());
     const end = closeEnd >= 0 ? closeEnd : pos;
     this._redirects = this.collectTrailingRedirects();
     return { type: "Case", pos, end, word, items } satisfies Case;
@@ -695,12 +722,14 @@ class Parser {
       while (this.tok.peek(LexContext.Normal).token === Token.Word) {
         wordlist.push(this.readWord(LexContext.Normal));
       }
-      if (this.tok.peek(LexContext.Normal).token === Token.Semi) this.tok.next(LexContext.Normal);
     }
+    this.skipSemi();
     this.skipNewlines(LexContext.CommandStart);
-    this.accept(Token.Do, LexContext.CommandStart);
+    if (!this.accept(Token.Do, LexContext.CommandStart)) this.error("expected 'do'", this.tok.getPos());
     const body = this.list();
+    this.skipSemi();
     const closeEnd = this.acceptEnd(Token.Done, LexContext.CommandStart);
+    if (closeEnd < 0) this.error("expected 'done' to close 'select'", this.tok.getPos());
     const end = closeEnd >= 0 ? closeEnd : pos;
     this._redirects = this.collectTrailingRedirects();
     return { type: "Select", pos, end, name, wordlist, body: this.makeCompoundList(body) } satisfies Select;
@@ -711,6 +740,7 @@ class Parser {
     const pos = this.tok.next(LexContext.CommandStart).pos; // consume [[
     const expr = this.parseTestOr();
     const closeEnd = this.acceptEnd(Token.DblRBracket, LexContext.TestMode);
+    if (closeEnd < 0 && this.tok.peek(LexContext.Normal).token === Token.EOF) this.error("expected ']]' to close '[['", this.tok.getPos());
     const end = closeEnd >= 0 ? closeEnd : pos;
     this._redirects = this.collectTrailingRedirects();
     return { type: "TestCommand", pos, end, expression: expr };
@@ -769,6 +799,7 @@ class Parser {
       const openPos = this.tok.next(LexContext.TestMode).pos;
       const expr = this.parseTestOr();
       const closeEnd = this.acceptEnd(Token.RParen, LexContext.TestMode);
+      if (closeEnd < 0) this.error("expected ')' to close test group", this.tok.getPos());
       const end = closeEnd >= 0 ? closeEnd : openPos;
       return { type: "TestGroup", pos: openPos, end, expression: expr } satisfies TestGroupExpression;
     }
@@ -825,7 +856,7 @@ class Parser {
     const name = this.readWord(LexContext.Normal);
     if (this.tok.peek(LexContext.CommandStart).token === Token.LParen) {
       this.tok.next(LexContext.CommandStart);
-      this.accept(Token.RParen, LexContext.CommandStart);
+      if (!this.accept(Token.RParen, LexContext.CommandStart)) this.error("expected ')' after '('", this.tok.getPos());
     }
     this.skipNewlines(LexContext.CommandStart);
     const body = this.commandAsBody();

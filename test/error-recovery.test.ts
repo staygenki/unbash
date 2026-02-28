@@ -34,6 +34,64 @@ test("truncated while (missing done) doesn't throw", () => {
   assert.equal(ast.type, "Script");
 });
 
+// ── Error collection ────────────────────────────────────────────────
+
+test("missing fi collects error", () => {
+  const ast = parse("if true; then echo yes");
+  assert.ok(ast.errors);
+  assert.ok(ast.errors.some((e) => e.message.includes("expected 'fi'")));
+});
+
+test("missing done collects error", () => {
+  const ast = parse("for x in a b; do echo $x");
+  assert.ok(ast.errors);
+  assert.ok(ast.errors.some((e) => e.message.includes("expected 'done'")));
+});
+
+test("missing ) collects error", () => {
+  const ast = parse("(echo hello");
+  assert.ok(ast.errors);
+  assert.ok(ast.errors.some((e) => e.message.includes("expected ')'")));
+});
+
+test("unclosed single quote collects error", () => {
+  const ast = parse("echo 'unterminated");
+  assert.ok(ast.errors);
+  assert.ok(ast.errors.some((e) => e.message.includes("unterminated single quote")));
+});
+
+test("unclosed double quote collects error", () => {
+  const ast = parse('echo "unterminated');
+  assert.ok(ast.errors);
+  assert.ok(ast.errors.some((e) => e.message.includes("unterminated double quote")));
+});
+
+test("valid input has no errors", () => {
+  const ast = parse("echo hello world");
+  assert.equal(ast.errors, undefined);
+});
+
+test("valid compound commands have no errors", () => {
+  const ast = parse("if true; then echo yes; fi");
+  assert.equal(ast.errors, undefined);
+});
+
+test("multiple errors collected", () => {
+  const ast = parse("if true; then (echo hello");
+  assert.ok(ast.errors);
+  assert.ok(ast.errors.length >= 2, `expected >= 2 errors, got ${ast.errors.length}`);
+});
+
+test("error positions are reasonable", () => {
+  const input = "for x in a b; do echo $x";
+  const ast = parse(input);
+  assert.ok(ast.errors);
+  for (const err of ast.errors) {
+    assert.ok(err.pos >= 0, `pos ${err.pos} should be >= 0`);
+    assert.ok(err.pos <= input.length, `pos ${err.pos} should be <= input length ${input.length}`);
+  }
+});
+
 // ── Edge-case inputs ─────────────────────────────────────────────────
 
 test("empty input returns empty Script", () => {
