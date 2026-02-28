@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>unbash playground</title>
+    <style>
+      * {
+        margin: 0;
+      }
+      body {
+        font-family: monospace;
+        height: 100vh;
+        display: flex;
+      }
+      textarea,
+      pre {
+        width: 50%;
+        padding: 1rem;
+        border: none;
+        outline: none;
+        resize: none;
+      }
+      textarea {
+        border-right: 1px solid grey;
+      }
+      pre {
+        overflow: auto;
+        background: whitesmoke;
+      }
+    </style>
+  </head>
+  <body>
+    <textarea id="in" spellcheck="false">
+echo "hello $USER"
+for f in *.log; do
+  cat "$f" | grep ERROR
+done</textarea
+    >
+    <pre id="out"></pre>
+    <script type="module">
+      import { parse } from "/parser.js";
+      const _in = document.getElementById("in");
+      const _out = document.getElementById("out");
+      const update = () => {
+        try {
+          _out.textContent = JSON.stringify(parse(_in.value), null, 2);
+        } catch (e) {
+          _out.textContent = e.message;
+        }
+      };
+      _in.oninput = update;
+      update();
+    </script>
+  </body>
+</html>

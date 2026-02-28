@@ -1,0 +1,181 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { parse } from "../src/parser.ts";
+import { verify } from "./verify.ts";
+import type { Command, Redirect, Statement } from "../src/types.ts";
+
+const roundtrip = (src: string) => {
+  const ast = parse(src);
+  assert.equal(verify(src, ast), src);
+  return ast;
+};
+
+const getRedirects = (src: string): Redirect[] => {
+  const ast = parse(src);
+  const cmd = ast.commands[0].command as Command;
+  return cmd.redirects;
+};
+
+// --- Multiple heredocs on one line ---
+
+test("two heredocs on one command", () => {
+  const src = "cmd <<A <<B\nfirst\nA\nsecond\nB\n";
+  const ast = roundtrip(src);
+  const cmd = ast.commands[0].command as Command;
+  assert.equal(cmd.redirects.length, 2);
+  assert.equal(cmd.redirects[0].content, "first\n");
+  assert.equal(cmd.redirects[1].content, "second\n");
+});
+
+test("two heredocs on separate commands", () => {
+  const src = "cat <<A; cat <<B\ncontentA\nA\ncontentB\nB\n";
+  const ast = roundtrip(src);
+  const r0 = (ast.commands[0].command as Command).redirects[0];
+  const r1 = (ast.commands[1].command as Command).redirects[0];
+  assert.equal(r0.content, "contentA\n");
+  assert.equal(r1.content, "contentB\n");
+});
+
+test("heredoc after pipe with second heredoc", () => {
+  const src = "cat <<A | grep x <<B\nalpha\nA\nbeta\nB\n";
+  roundtrip(src);
+});
+
+// --- Heredocs in compound commands ---
+
+test("heredoc inside if body", () => {
+  const src = "if true; then cat <<EOF\nhello\nEOF\nfi\n";
+  roundtrip(src);
+});
+
+test("heredoc inside while loop", () => {
+  const src = "while read line; do echo $line; done <<EOF\nline1\nline2\nEOF\n";
+  const ast = roundtrip(src);
+  const stmt = ast.commands[0] as Statement;
+  assert.equal(stmt.redirects.length, 1);
+  assert.equal(stmt.redirects[0].content, "line1\nline2\n");
+});
+
+test("heredoc inside function", () => {
+  const src = "f() {\ncat <<EOF\nbody text\nEOF\n}\n";
+  roundtrip(src);
+});
+
+// --- Heredoc delimiter edge cases ---
+
+test("heredoc with hyphenated delimiter", () => {
+  const src = "cat <<END-OF-DATA\nstuff\nEND-OF-DATA\n";
+  const r = getRedirects(src)[0];
+  assert.equal(r.content, "stuff\n");
+});
+
+test("heredoc with underscore delimiter", () => {
+  const src = "cat <<__EOF__\nstuff\n__EOF__\n";
+  const r = getRedirects(src)[0];
+  assert.equal(r.content, "stuff\n");
+});
+
+test("heredoc with numeric delimiter", () => {
+  const src = "cat <<123\nstuff\n123\n";
+  const r = getRedirects(src)[0];
+  assert.equal(r.content, "stuff\n");
+});
+
+// --- Strip heredoc with tabs ---
+
+test("<<- strips leading tabs from content and delimiter", () => {
+  const src = "cat <<-EOF\n\t\thello\n\t\tworld\n\tEOF\n";
+  const r = getRedirects(src)[0];
+  assert.equal(r.operator, "<<-");
+  assert.ok(r.content!.includes("hello"));
+});
+
+// --- Heredoc content edge cases ---
+
+test("heredoc with line matching delimiter prefix", () => {
+  const src = "cat <<EOF\nEOFoo is not the end\nEOF\n";
+  const r = getRedirects(src)[0];
+  assert.equal(r.content, "EOFoo is not the end\n");
+});
+
+test("heredoc with blank lines", () => {
+  const src = "cat <<EOF\n\n\nbetween blanks\n\n\nEOF\n";
+  const r = getRedirects(src)[0];
+  assert.equal(r.content, "\n\nbetween blanks\n\n\n");
+});
+
+test("heredoc with only newlines", () => {
+  const src = "cat <<EOF\n\n\n\nEOF\n";
+  const r = getRedirects(src)[0];
+  assert.equal(r.content, "\n\n\n");
+});
+
+// --- Herestring edge cases ---
+
+test("herestring with double-quoted value", () => {
+  const src = 'read x <<< "hello world"';
+  const ast = roundtrip(src);
+  const cmd = ast.commands[0].command as Command;
+  assert.equal(cmd.redirects[0].operator, "<<<");
+});
+
+test("herestring with variable expansion", () => {
+  const src = "read x <<< $var";
+  roundtrip(src);
+});
+
+test("herestring with command substitution", () => {
+  const src = "read x <<< $(echo hello)";
+  roundtrip(src);
+});
+
+// --- Heredoc combined with other redirects ---
+
+test("heredoc with stderr redirect on same command", () => {
+  const src = "cmd <<EOF 2>/dev/null\nbody\nEOF\n";
+  const ast = roundtrip(src);
+  const cmd = ast.commands[0].command as Command;
+  assert.equal(cmd.redirects.length, 2);
+});
+
+test("heredoc after pipe", () => {
+  const src = "cat <<EOF | grep hello\nhello world\ngoodbye world\nEOF\n";
+  roundtrip(src);
+});
+
+// --- Heredoc delimiter edge cases (tokenizer) ────────────────────────
+
+test("single-quoted heredoc delimiter suppresses expansion", () => {
+  const ast = parse("cat <<'END'\n$not_expanded\nEND");
+  const cmd = ast.commands[0].command as Command;
+  assert.equal(cmd.redirects?.[0].content, "$not_expanded\n");
+});
+
+test("double-quoted heredoc delimiter", () => {
+  const ast = parse('cat <<"END"\n$not_expanded\nEND');
+  const cmd = ast.commands[0].command as Command;
+  assert.ok(cmd.redirects?.[0].content?.includes("$not_expanded"));
+});
+
+test("backslash-escaped heredoc delimiter", () => {
+  const ast = parse("cat <<\\EOF\nbody\nEOF");
+  const cmd = ast.commands[0].command as Command;
+  assert.equal(cmd.redirects?.[0].content, "body\n");
+});
+
+test("heredoc delimiter with underscores", () => {
+  const ast = parse("cat <<_LONG_DELIMITER_\nbody\n_LONG_DELIMITER_");
+  const cmd = ast.commands[0].command as Command;
+  assert.equal(cmd.redirects?.[0].content, "body\n");
+});
+
+test("heredoc delimiter partial match is not terminator", () => {
+  const ast = parse("cat <<EOF\nEOF_not_end\nEOF");
+  const cmd = ast.commands[0].command as Command;
+  assert.equal(cmd.redirects?.[0].content, "EOF_not_end\n");
+});
+
+test("two heredocs on one line (tokenizer)", () => {
+  const ast = parse("cat <<A; cat <<B\n1\nA\n2\nB");
+  assert.equal(ast.commands.length, 2);
+});
