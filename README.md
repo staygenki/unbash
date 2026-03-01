@@ -16,8 +16,9 @@ import { parse } from "unbash";
 const ast = parse('if [ -f "$1" ]; then cat "$1"; fi');
 ```
 
+Result:
+
 ```js
-// Result:
 {
   type: "Script",
   commands: [{
@@ -26,6 +27,26 @@ const ast = parse('if [ -f "$1" ]; then cat "$1"; fi');
     then: { type: "Command", name: { text: "cat" }, ... }
   }]
 }
+```
+
+## Print
+
+Basic opinionated printer, does not preserve whitespace or comments (except shebang):
+
+```ts
+import { parse } from "unbash";
+import { print } from "unbash/print";
+
+const ast = parse('if [ -f "$1" ]; then cat "$1"; fi');
+const script = print(ast);
+```
+
+Result:
+
+```sh
+if [ -f "$1" ]; then
+  cat "$1"
+fi
 ```
 
 ## unbash vs tree-sitter-bash
