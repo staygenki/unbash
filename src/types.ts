@@ -421,6 +421,7 @@ export interface Script {
   type: "Script";
   pos: number;
   end: number;
+  shebang: string | undefined;
   commands: Statement[];
 }
 

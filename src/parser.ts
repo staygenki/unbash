@@ -316,6 +316,11 @@ class Parser {
   }
 
   parse(sourceLen: number): Script & { errors?: ParseError[] } {
+    let shebang: string | undefined;
+    if (this.source.charCodeAt(0) === 35 && this.source.charCodeAt(1) === 33) {
+      const nl = this.source.indexOf("\n");
+      shebang = nl === -1 ? this.source : this.source.slice(0, nl);
+    }
     const commands = this.list();
     const lexerErrors = this.tok._errors;
     if (lexerErrors !== null) {
@@ -325,6 +330,7 @@ class Parser {
       type: "Script",
       pos: 0,
       end: sourceLen,
+      shebang,
       commands,
       errors: this.errors.length > 0 ? this.errors : undefined,
     };
