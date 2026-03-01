@@ -6,49 +6,74 @@
     <style>
       * {
         margin: 0;
+        box-sizing: border-box;
       }
       body {
         font-family: monospace;
         height: 100vh;
-        display: flex;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto 1fr;
       }
       textarea,
-      pre {
-        width: 50%;
-        padding: 1rem;
-        border: none;
-        outline: none;
-        resize: none;
+      #print {
+        grid-column: 1;
       }
       textarea {
+        padding: 1rem;
+        border: none;
         border-right: 1px solid grey;
+        border-bottom: 1px solid grey;
+        outline: none;
+        resize: none;
+        height: 65vh;
       }
-      pre {
+      #print {
+        padding: 1rem;
+        border-right: 1px solid grey;
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow: auto;
+        background: dimgray;
+        color: whitesmoke;
+      }
+      #parse {
+        white-space: pre;
+        padding: 1rem;
         overflow: auto;
         background: whitesmoke;
+        grid-column: 2;
+        grid-row: 1 / -1;
       }
     </style>
   </head>
   <body>
-    <textarea id="in" spellcheck="false">
+    <textarea id="input" spellcheck="false">
 echo "hello $USER"
 for f in *.log; do
   cat "$f" | grep ERROR
 done</textarea
     >
-    <pre id="out"></pre>
+    <output id="parse"></output>
+    <output id="print"></output>
     <script type="module">
       import { parse } from "/parser.js";
-      const _in = document.getElementById("in");
-      const _out = document.getElementById("out");
+      import { print } from "/printer.js";
+      const _input = document.getElementById("input");
+      const _parse = document.querySelector("output#parse");
+      const _print = document.querySelector("output#print");
       const update = () => {
         try {
-          _out.textContent = JSON.stringify(parse(_in.value), null, 2);
+          const src = _input.value;
+          const ast = parse(src);
+          _parse.textContent = JSON.stringify(ast, null, 2);
+          _print.textContent = print(ast);
         } catch (e) {
-          _out.textContent = e.message;
+          _parse.textContent = e.message;
+          _print.textContent = e.message;
         }
       };
-      _in.oninput = update;
+      _input.oninput = update;
       update();
     </script>
   </body>

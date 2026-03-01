@@ -1,0 +1,3 @@
+image: node:24-alpine
+command: npm run playground
+public: playground
