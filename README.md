@@ -97,13 +97,13 @@ Relative performance comparison (on Apple M1 Pro/32GB), unbash is x times faster
 
 | Parser                       | short | advanced | medium | large |
 | ---------------------------- | ----: | -------: | -----: | ----: |
-| tree-sitter-bash (native)    |   14x |       9x |     4x |    4x |
-| tree-sitter-bash (WASM)      |   14x |      11x |     7x |    7x |
-| sh-syntax                    | 1998x |    1419x |     7x |    4x |
-| bash-parser                  |  236x |      N/A |    N/A |   N/A |
-| @ericcornelissen/bash-parser |  247x |      N/A |    N/A |   N/A |
+| tree-sitter-bash (native)    |   13x |       9x |     4x |    5x |
+| tree-sitter-bash (WASM)      |   16x |      12x |     8x |    8x |
+| sh-syntax                    | 2136x |    1537x |     8x |    4x |
+| bash-parser                  |  256x |      N/A |    N/A |   N/A |
+| @ericcornelissen/bash-parser |  267x |      N/A |    N/A |   N/A |
 
-Run the benchmarks using Node.js v22 or v24:
+Run the benchmarks using Node.js v22:
 
 ```sh
 pnpm install

@@ -171,33 +171,6 @@ charType[CH_DOLLAR] = 2;
 charType[CH_BACKTICK] = 2;
 charType[CH_LBRACE] = 2;
 
-function hasCaseKeyword(src: string, from: number, to: number): boolean {
-  let i = src.indexOf("case", from);
-  while (i !== -1 && i + 4 <= to) {
-    if (i > from) {
-      const prev = src.charCodeAt(i - 1);
-      if (
-        prev !== CH_SPACE &&
-        prev !== CH_TAB &&
-        prev !== CH_NL &&
-        prev !== CH_SEMI &&
-        prev !== CH_PIPE &&
-        prev !== CH_AMP
-      ) {
-        i = src.indexOf("case", i + 1);
-        continue;
-      }
-    }
-    const a = i + 4;
-    if (a < to) {
-      const nc = src.charCodeAt(a);
-      if (nc === CH_SPACE || nc === CH_TAB || nc === CH_NL) return true;
-    }
-    i = src.indexOf("case", i + 1);
-  }
-  return false;
-}
-
 function findUnnested(s: string, target: number): number {
   let depth = 0;
   for (let i = 0; i < s.length; i++) {
@@ -2300,7 +2273,6 @@ export class Lexer {
 
     // Slow path: just track position (source is copied verbatim, so slice at end)
     let caseDepth = 0;
-    if (hasCaseKeyword(src, start, this.pos)) caseDepth++;
 
     while (this.pos < len && depth > 0) {
       const ch = src.charCodeAt(this.pos);
