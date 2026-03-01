@@ -50,7 +50,7 @@ test("nested if inside if", () => {
   const src = "if true; then if false; then echo a; else echo b; fi; fi";
   const ast = roundtrip(src);
   const outer = ast.commands[0].command as If;
-  const inner = outer.then as If;
+  const inner = outer.then.commands[0].command as If;
   assert.equal(inner.type, "If");
   assert.ok(inner.else);
 });

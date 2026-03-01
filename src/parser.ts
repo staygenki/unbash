@@ -671,18 +671,18 @@ class Parser {
   // if_clause := IF list THEN list (ELIF list THEN list)* [ELSE list] FI
   private ifClause(): If {
     const pos = this.tok.next(LexContext.CommandStart).pos;
-    const clause = this.wrapList(this.list());
+    const clause = this.makeCompoundList(this.list());
     this.skipSemi();
     if (!this.accept(Token.Then, LexContext.CommandStart)) this.error("expected 'then'", this.tok.getPos());
-    const then_ = this.wrapList(this.list());
+    const then_ = this.makeCompoundList(this.list());
     this.skipSemi();
-    let else_: Node | undefined;
+    let else_: CompoundList | If | undefined;
     let end: number;
     if (this.tok.peek(LexContext.CommandStart).token === Token.Elif) {
       else_ = this.ifClause();
       end = else_.end; // elif's ifClause already consumed fi
     } else if (this.accept(Token.Else, LexContext.CommandStart)) {
-      else_ = this.wrapList(this.list());
+      else_ = this.makeCompoundList(this.list());
       this.skipSemi();
       const closeEnd = this.acceptEnd(Token.Fi, LexContext.CommandStart);
       if (closeEnd < 0) this.error("expected 'fi' to close 'if'", this.tok.getPos());
@@ -754,7 +754,7 @@ class Parser {
 
   private whileOrUntil(kind: "while" | "until"): While {
     const pos = this.tok.next(LexContext.CommandStart).pos;
-    const clause = this.wrapList(this.list());
+    const clause = this.makeCompoundList(this.list());
     this.skipSemi();
     if (!this.accept(Token.Do, LexContext.CommandStart)) this.error("expected 'do'", this.tok.getPos());
     const body = this.list();
@@ -1186,8 +1186,4 @@ class Parser {
     return { type: "CompoundList", pos, end, commands };
   }
 
-  private wrapList(stmts: Statement[]): Node {
-    if (stmts.length === 1) return stmts[0].command;
-    return this.makeCompoundList(stmts);
-  }
 }

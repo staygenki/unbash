@@ -22,9 +22,12 @@ function visitWords(node: Node | Statement): number {
       for (const c of node.commands) count += visitWords(c);
       break;
     case "If":
-      count += visitNode(node.clause);
-      count += visitNode(node.then);
-      if (node.else) count += visitNode(node.else);
+      count += visitCompoundList(node.clause);
+      count += visitCompoundList(node.then);
+      if (node.else) {
+        if (node.else.type === "If") count += visitWords(node.else);
+        else count += visitCompoundList(node.else);
+      }
       break;
     case "For":
       count += touchWord(node.name);
@@ -32,7 +35,7 @@ function visitWords(node: Node | Statement): number {
       count += visitCompoundList(node.body);
       break;
     case "While":
-      count += visitNode(node.clause);
+      count += visitCompoundList(node.clause);
       count += visitCompoundList(node.body);
       break;
     case "Case":

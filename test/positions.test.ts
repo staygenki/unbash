@@ -334,9 +334,12 @@ function walkNode(node: Node, source: string, path: string) {
       for (let i = 0; i < node.commands.length; i++) walkNode(node.commands[i], source, `${path}.commands[${i}]`);
       break;
     case "If":
-      walkNode(node.clause, source, `${path}.clause`);
-      walkNode(node.then, source, `${path}.then`);
-      if (node.else) walkNode(node.else, source, `${path}.else`);
+      walkCompoundList(node.clause, source, `${path}.clause`);
+      walkCompoundList(node.then, source, `${path}.then`);
+      if (node.else) {
+        if (node.else.type === "If") walkNode(node.else, source, `${path}.else`);
+        else walkCompoundList(node.else, source, `${path}.else`);
+      }
       break;
     case "For":
       walkWord(node.name, source, `${path}.name`);
@@ -347,7 +350,7 @@ function walkNode(node: Node, source: string, path: string) {
       walkCompoundList(node.body, source, `${path}.body`);
       break;
     case "While":
-      walkNode(node.clause, source, `${path}.clause`);
+      walkCompoundList(node.clause, source, `${path}.clause`);
       walkCompoundList(node.body, source, `${path}.body`);
       break;
     case "Case":

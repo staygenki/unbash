@@ -223,9 +223,9 @@ export interface If {
   type: "If";
   pos: number;
   end: number;
-  clause: Node;
-  then: Node;
-  else: Node | undefined;
+  clause: CompoundList;
+  then: CompoundList;
+  else: CompoundList | If | undefined;
 }
 
 export interface For {
@@ -244,7 +244,7 @@ export interface While {
   pos: number;
   end: number;
   kind: WhileKind;
-  clause: Node;
+  clause: CompoundList;
   body: CompoundList;
 }
 
