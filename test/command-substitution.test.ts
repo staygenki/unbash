@@ -86,6 +86,124 @@ test("backtick in double quotes", () => {
   assert.ok(ast.commands.length > 0);
 });
 
+// ── Heredoc inside $() command substitution ──────────────────────────
+
+const getComsubScriptCommandCount = (src: string): number => {
+  const ast = parse(src);
+  assert.equal(ast.errors, undefined);
+  const c = getCmd(ast);
+  const last = c.suffix[c.suffix.length - 1];
+  const parts = wp(src, last) ?? [];
+  const expansion = parts.find((p) => p.type === "CommandExpansion");
+  assert.ok(expansion, "expected a CommandExpansion part");
+  if (expansion?.type !== "CommandExpansion") throw new Error("unreachable");
+  return expansion.script!.commands.length;
+};
+
+test("heredoc body with closing paren does not break outer $() balance", () => {
+  assert.equal(
+    getComsubScriptCommandCount(
+      `echo "$(cat <<'EOF'
+body with closing ) paren
+EOF
+)"`,
+    ),
+    1,
+  );
+});
+
+test("heredoc body with multiple unbalanced parens inside $()", () => {
+  assert.equal(
+    getComsubScriptCommandCount(
+      `echo "$(cat <<'EOF'
+closing ) only
+more ) stuff
+EOF
+)"`,
+    ),
+    1,
+  );
+});
+
+test("<<- strips leading tabs when locating terminator inside $()", () => {
+  assert.equal(getComsubScriptCommandCount("echo \"$(cat <<-END\n\tbody with )\n\tEND\n)\""), 1);
+});
+
+test("double-quoted heredoc delimiter inside $()", () => {
+  assert.equal(
+    getComsubScriptCommandCount(
+      `echo "$(cat <<"EOF"
+body with ) paren
+EOF
+)"`,
+    ),
+    1,
+  );
+});
+
+test("unquoted heredoc delimiter inside $()", () => {
+  assert.equal(
+    getComsubScriptCommandCount(
+      `echo "$(cat <<EOF
+body with ) here
+EOF
+)"`,
+    ),
+    1,
+  );
+});
+
+test("backslash-escaped heredoc delimiter inside $()", () => {
+  assert.equal(
+    getComsubScriptCommandCount(
+      `echo "$(cat <<\\EOF
+body with ) paren
+EOF
+)"`,
+    ),
+    1,
+  );
+});
+
+test("<<< herestring inside $() is not treated as a heredoc body", () => {
+  const ast = parse(`x=$(cat <<<"input" ; echo done)`);
+  assert.equal(ast.errors, undefined);
+});
+
+test("second heredoc after first in same $() is skipped", () => {
+  assert.equal(
+    getComsubScriptCommandCount(
+      `echo "$(cat <<A && cat <<B
+first ) body
+A
+second ) body
+B
+)"`,
+    ),
+    1,
+  );
+});
+
+test("heredoc in $() with realistic multi-paragraph commit message", () => {
+  const src = [
+    'git commit -m "$(cat <<\'EOF\'',
+    "feat: add support for `@local/*` paths (21 of them)",
+    "",
+    "v1's lookup is `WHERE token = ?` on the raw value — simple enough",
+    "but it's easy to get wrong. (v1's lookup ignores case, v2 does not.)",
+    "",
+    "**Bold** text and em-dash — included.",
+    "",
+    "Co-Authored-By: Someone <x@y>",
+    "EOF",
+    ')"',
+  ].join("\n");
+  const ast = parse(src);
+  assert.equal(ast.errors, undefined);
+  const c = getCmd(ast);
+  assert.equal(c.name?.text, "git");
+});
+
 // ── $"..." locale strings ────────────────────────────────────────────
 
 test('$"..." locale string', () => {

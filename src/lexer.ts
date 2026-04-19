@@ -2248,7 +2248,7 @@ export class Lexer {
           return result;
         }
         this.pos++;
-      } else if (c === CH_LPAREN || c === CH_BACKSLASH || c === CH_SQUOTE || c === CH_DQUOTE || c === CH_BACKTICK) {
+      } else if (c === CH_LPAREN || c === CH_BACKSLASH || c === CH_SQUOTE || c === CH_DQUOTE || c === CH_BACKTICK || c === CH_LT) {
         break;
       } else if (
         c === 99 /* c */ &&
@@ -2270,6 +2270,10 @@ export class Lexer {
 
     // Slow path: just track position (source is copied verbatim, so slice at end)
     let caseDepth = 0;
+    // Heredocs opened on the current logical line — consumed when we hit \n.
+    // Without this, a `)` appearing in a heredoc body would decrement depth
+    // and prematurely end the outer $(...).
+    const pendingHereDocs: Array<{ delimiter: string; strip: boolean }> = [];
 
     while (this.pos < len && depth > 0) {
       const ch = src.charCodeAt(this.pos);
@@ -2291,6 +2295,30 @@ export class Lexer {
       } else if (ch === CH_BACKSLASH) {
         this.pos++;
         if (this.pos < len) this.pos++;
+      } else if (ch === CH_LT && this.pos + 1 < len && src.charCodeAt(this.pos + 1) === CH_LT) {
+        if (this.pos + 2 < len && src.charCodeAt(this.pos + 2) === CH_LT) {
+          // <<< herestring — the input word is on the same line, not a body
+          this.pos += 3;
+        } else {
+          this.pos += 2;
+          const dash = this.pos < len && src.charCodeAt(this.pos) === CH_DASH;
+          if (dash) this.pos++;
+          while (this.pos < len) {
+            const sc = src.charCodeAt(this.pos);
+            if (sc === CH_SPACE || sc === CH_TAB) this.pos++;
+            else break;
+          }
+          this.readHereDocDelimiter();
+          if (this._hereDelim) {
+            pendingHereDocs.push({ delimiter: this._hereDelim, strip: dash });
+          }
+        }
+      } else if (ch === CH_NL) {
+        this.pos++;
+        while (pendingHereDocs.length > 0) {
+          const hd = pendingHereDocs.shift()!;
+          this.readHereDocBody(hd.delimiter, hd.strip);
+        }
       } else if (ch === CH_SQUOTE) {
         this.pos++;
         this.skipSQ();
