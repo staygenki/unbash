@@ -699,8 +699,10 @@ class Parser {
     this.skipNewlines(LexContext.CommandStart);
     if (this.tok.peek(LexContext.CommandStart).token === Token.In) {
       this.tok.next(LexContext.CommandStart);
-      while (this.tok.peek(LexContext.Normal).token === Token.Word) {
+      this.skipNewlines(LexContext.CommandStart);
+      while (this.tok.peek(LexContext.CommandStart).token === Token.Word) {
         wordlist.push(this.readWord(LexContext.Normal));
+        this.skipNewlines(LexContext.CommandStart);
       }
     }
     this.skipSemi();
@@ -826,8 +828,10 @@ class Parser {
     this.skipNewlines(LexContext.CommandStart);
     if (this.tok.peek(LexContext.CommandStart).token === Token.In) {
       this.tok.next(LexContext.CommandStart);
-      while (this.tok.peek(LexContext.Normal).token === Token.Word) {
+      this.skipNewlines(LexContext.CommandStart);
+      while (this.tok.peek(LexContext.CommandStart).token === Token.Word) {
         wordlist.push(this.readWord(LexContext.Normal));
+        this.skipNewlines(LexContext.CommandStart);
       }
     }
     this.skipSemi();
